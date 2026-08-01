@@ -1,0 +1,44 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a problem.
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      placeholder: 1.1.0
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version and Mac model
+      placeholder: macOS 15.6, MacBook Pro 14-inch (2023)
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include what you expected and the exact sequence that produced the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Remove personal or machine-specific information before pasting unified logs.
+      render: shell
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Safety checks
+      options:
+        - label: I confirmed this affected a built-in display or built-in keyboard backlight.
+          required: true
+        - label: I searched existing issues for the same behavior.
+          required: true

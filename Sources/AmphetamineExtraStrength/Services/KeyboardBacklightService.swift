@@ -21,7 +21,7 @@ enum KeyboardBacklightControlError: LocalizedError {
 
 final class SystemKeyboardBacklightService: BrightnessControlling {
     private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
+        subsystem: Bundle.main.bundleIdentifier ?? "com.eflyn.AmphetamineExtraStrength",
         category: "keyboard-backlight"
     )
     private var handle: AESKeyboardBacklightHandle?

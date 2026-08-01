@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: SettingsWindowController?
     private var onboardingWindowController: OnboardingWindowController?
     private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
+        subsystem: Bundle.main.bundleIdentifier ?? "com.eflyn.AmphetamineExtraStrength",
         category: "lifecycle"
     )
 

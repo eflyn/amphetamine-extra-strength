@@ -26,7 +26,7 @@ enum LoginItemState: Equatable {
 @MainActor
 final class LoginItemService {
     private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
+        subsystem: Bundle.main.bundleIdentifier ?? "com.eflyn.AmphetamineExtraStrength",
         category: "login-item"
     )
 

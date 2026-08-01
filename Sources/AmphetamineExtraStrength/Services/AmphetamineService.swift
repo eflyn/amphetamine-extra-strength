@@ -14,7 +14,7 @@ final class SystemAmphetamineService: AmphetamineServicing {
 
     private let workspace: NSWorkspace
     private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
+        subsystem: Bundle.main.bundleIdentifier ?? "com.eflyn.AmphetamineExtraStrength",
         category: "amphetamine"
     )
     private lazy var sessionScript: NSAppleScript? = {

@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Verify tag matches app version
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Config/Info.plist)
+          test "${GITHUB_REF_NAME}" = "v${version}"
+
+      - name: Run state-machine tests
+        run: ./scripts/run-tests.sh
+
+      - name: Package universal release
+        run: ./scripts/package-release.sh
+
+      - name: Inspect release app
+        run: |
+          app="dist/Amphetamine Extra Strength.app"
+          lipo -archs "$app/Contents/MacOS/AmphetamineExtraStrength"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app" || true
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/Amphetamine-Extra-Strength-*-macOS.zip \
+            dist/Amphetamine-Extra-Strength-*-macOS.zip.sha256 \
+            --generate-notes \
+            --title "Amphetamine Extra Strength ${GITHUB_REF_NAME#v}" \
+            --verify-tag

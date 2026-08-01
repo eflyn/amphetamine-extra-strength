@@ -8,7 +8,7 @@ protocol LidStateReading: AnyObject {
 
 final class SystemLidStateService: LidStateReading {
     private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
+        subsystem: Bundle.main.bundleIdentifier ?? "com.eflyn.AmphetamineExtraStrength",
         category: "lid"
     )
 

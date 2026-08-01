@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Run state-machine tests
+        run: ./scripts/run-tests.sh
+
+      - name: Build Swift package
+        run: swift build
+
+      - name: Build universal app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Inspect architectures and signature
+        run: |
+          lipo -archs "dist/Amphetamine Extra Strength.app/Contents/MacOS/AmphetamineExtraStrength"
+          codesign --verify --deep --strict --verbose=2 "dist/Amphetamine Extra Strength.app"

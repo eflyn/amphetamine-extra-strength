@@ -40,7 +40,7 @@ final class SystemBrightnessService: BrightnessControlling {
     ) -> Int32
 
     private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
+        subsystem: Bundle.main.bundleIdentifier ?? "com.eflyn.AmphetamineExtraStrength",
         category: "brightness"
     )
 

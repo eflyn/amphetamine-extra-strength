@@ -55,7 +55,7 @@ final class BrightnessGuard {
         recoveryStore: BrightnessRecoveryStoring,
         resourceName: String = "built-in display",
         logger: Logger = Logger(
-            subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
+            subsystem: Bundle.main.bundleIdentifier ?? "com.eflyn.AmphetamineExtraStrength",
             category: "brightness-guard"
         )
     ) {
