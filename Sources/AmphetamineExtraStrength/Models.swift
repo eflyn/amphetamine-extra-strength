@@ -103,16 +103,25 @@ struct UtilitySnapshot: Equatable {
     var lid: LidState = .unavailable
     var builtInBrightness: Float?
     var brightnessOwnership: BrightnessOwnershipState = .idle
+    var keyboardBacklightBrightness: Float?
+    var keyboardBacklightOwnership: BrightnessOwnershipState = .idle
     var launchError: String?
     var brightnessError: String?
+    var keyboardBacklightError: String?
     var isMonitoring = false
 
     var utilityStatus: String {
         if case .restorePending = brightnessOwnership {
             return "Waiting to restore brightness"
         }
+        if case .restorePending = keyboardBacklightOwnership {
+            return "Waiting to restore keyboard backlight"
+        }
         if let brightnessError {
             return brightnessError
+        }
+        if let keyboardBacklightError {
+            return keyboardBacklightError
         }
         if let launchError {
             return launchError
@@ -125,6 +134,17 @@ struct UtilitySnapshot: Equatable {
             return true
         }
         return false
+    }
+
+    var hasKeyboardBacklightDimmed: Bool {
+        if case .dimmed = keyboardBacklightOwnership {
+            return true
+        }
+        return false
+    }
+
+    var ownsAnyBrightness: Bool {
+        brightnessOwnership.isOwned || keyboardBacklightOwnership.isOwned
     }
 }
 

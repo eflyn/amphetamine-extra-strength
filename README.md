@@ -3,11 +3,11 @@
 A small native macOS menu-bar utility that works alongside
 [Amphetamine](https://apps.apple.com/app/amphetamine/id937984704). When the
 MacBook lid closes during the configured Amphetamine state, it saves the
-built-in display brightness, sets that display to zero, and restores the saved
-value when the conditions end.
+built-in display and keyboard backlight brightness, sets both to zero, and
+restores their saved values when the conditions end.
 
 It has no Dock icon, windows are optional after onboarding, and it does not
-control Amphetamine sessions or external displays.
+control Amphetamine sessions, external displays, or external keyboard lighting.
 
 ## Requirements
 
@@ -44,11 +44,14 @@ Launch at login uses macOS `SMAppService`. macOS may require approval in
 
 - The built-in display is selected with `CGDisplayIsBuiltin`; external display
   IDs are never passed to brightness control.
-- Brightness ownership is persisted before the zero-brightness write.
+- The keyboard backlight client enumerates backlights and selects only the one
+  CoreBrightness identifies as belonging to the built-in keyboard.
+- Display and keyboard ownership are persisted independently before their
+  zero-brightness writes.
 - An existing zero is never saved as the original brightness.
-- The saved brightness is immutable for the entire owned dim cycle.
+- Each saved brightness is immutable for its entire owned dim cycle.
 - A nonzero manual adjustment relinquishes ownership and suppresses re-dimming
-  until the conditions reset.
+  for that device until the conditions reset.
 - Failed restores remain pending and are retried after timer, wake, session,
   application, and display-configuration events.
 - Amphetamine launch failures use an exponential cooldown capped at two
@@ -56,9 +59,10 @@ Launch at login uses macOS `SMAppService`. macOS may require approval in
 - Two consecutive running/session samples are required before dimming.
 
 macOS does not expose a supported public API for changing hardware display
-brightness. This utility dynamically loads the system DisplayServices
-brightness functions at runtime and reports an actionable unavailable state if
-they cannot be loaded on a future macOS release.
+or keyboard-backlight brightness. This utility dynamically loads the system
+DisplayServices and CoreBrightness functions at runtime and reports an
+actionable unavailable state if either cannot be loaded on a future macOS
+release.
 
 ## Development
 

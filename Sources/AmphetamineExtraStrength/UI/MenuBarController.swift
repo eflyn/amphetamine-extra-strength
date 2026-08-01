@@ -49,13 +49,32 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         addStatus("Built-in brightness", brightnessLabel(snapshot.builtInBrightness))
         addStatus("Display dimmed by utility", snapshot.hasDisplayDimmed ? "Yes" : "No")
         if let savedBrightness = snapshot.brightnessOwnership.savedBrightness {
-            addStatus("Saved brightness", percentLabel(savedBrightness))
+            addStatus("Saved display brightness", percentLabel(savedBrightness))
+        }
+        addStatus(
+            "Keyboard backlight",
+            brightnessLabel(snapshot.keyboardBacklightBrightness)
+        )
+        addStatus(
+            "Keyboard dimmed by utility",
+            snapshot.hasKeyboardBacklightDimmed ? "Yes" : "No"
+        )
+        if let savedKeyboardBacklight =
+            snapshot.keyboardBacklightOwnership.savedBrightness
+        {
+            addStatus(
+                "Saved keyboard backlight",
+                percentLabel(savedKeyboardBacklight)
+            )
         }
         if let launchError = snapshot.launchError {
             addMessage(launchError)
         }
         if let brightnessError = snapshot.brightnessError {
             addMessage(brightnessError)
+        }
+        if let keyboardBacklightError = snapshot.keyboardBacklightError {
+            addMessage(keyboardBacklightError)
         }
 
         menu.addItem(.separator())
@@ -70,7 +89,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             action: #selector(toggleRelaunch)
         )
         addToggle(
-            "Dim display when lid is closed",
+            "Dim display and keyboard when lid is closed",
             isOn: controller.settings.dimWhenLidClosed,
             action: #selector(toggleAutomaticDimming)
         )
@@ -106,10 +125,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             snapshot.installation != .notInstalled && !snapshot.amphetamineRunning
 
         let restoreItem = addAction(
-            "Restore Brightness Now",
+            "Restore Display and Keyboard Now",
             action: #selector(restoreBrightnessNow)
         )
-        restoreItem.isEnabled = snapshot.brightnessOwnership.isOwned
+        restoreItem.isEnabled = snapshot.ownsAnyBrightness
 
         menu.addItem(.separator())
         addAction("Open Settings…", action: #selector(openSettings))
@@ -178,9 +197,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private func updateStatusIcon(_ snapshot: UtilitySnapshot) {
         let symbolName: String
-        if snapshot.brightnessOwnership.isOwned {
+        if snapshot.ownsAnyBrightness {
             symbolName = "sun.min.fill"
-        } else if snapshot.launchError != nil || snapshot.brightnessError != nil {
+        } else if snapshot.launchError != nil
+                    || snapshot.brightnessError != nil
+                    || snapshot.keyboardBacklightError != nil
+        {
             symbolName = "exclamationmark.triangle.fill"
         } else {
             symbolName = "sun.max"

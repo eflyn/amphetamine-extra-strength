@@ -9,11 +9,16 @@ protocol BrightnessRecoveryStoring: AnyObject {
 
 final class UserDefaultsBrightnessRecoveryStore: BrightnessRecoveryStoring {
     private let defaults: UserDefaults
-    private let ownershipKey = "brightnessRecovery.isOwned"
-    private let savedBrightnessKey = "brightnessRecovery.savedBrightness"
+    private let ownershipKey: String
+    private let savedBrightnessKey: String
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        keyPrefix: String = "brightnessRecovery"
+    ) {
         self.defaults = defaults
+        ownershipKey = "\(keyPrefix).isOwned"
+        savedBrightnessKey = "\(keyPrefix).savedBrightness"
     }
 
     var savedBrightness: Float? {
@@ -38,6 +43,7 @@ final class BrightnessGuard {
     private let controller: BrightnessControlling
     private let recoveryStore: BrightnessRecoveryStoring
     private let logger: Logger
+    private let resourceName: String
     private let zeroThreshold: Float = 0.015
 
     private(set) var state: BrightnessOwnershipState
@@ -47,6 +53,7 @@ final class BrightnessGuard {
     init(
         controller: BrightnessControlling,
         recoveryStore: BrightnessRecoveryStoring,
+        resourceName: String = "built-in display",
         logger: Logger = Logger(
             subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
             category: "brightness-guard"
@@ -54,6 +61,7 @@ final class BrightnessGuard {
     ) {
         self.controller = controller
         self.recoveryStore = recoveryStore
+        self.resourceName = resourceName
         self.logger = logger
 
         if let savedBrightness = recoveryStore.savedBrightness {
@@ -97,14 +105,11 @@ final class BrightnessGuard {
     }
 
     private func dimIfPossible() {
-        switch controller.builtInBrightness() {
-        case .failure(let error):
-            lastError = error.localizedDescription
-            logger.error("Cannot save brightness before dimming: \(error.localizedDescription, privacy: .public)")
-        case .success(let currentBrightness):
+        do {
+            let currentBrightness = try controller.currentBrightness()
             guard currentBrightness > zeroThreshold else {
                 logger.debug(
-                    "Built-in display is already at zero; no ownership or recovery record will be created"
+                    "\(self.resourceName, privacy: .public) is already at zero; no ownership or recovery record will be created"
                 )
                 return
             }
@@ -112,18 +117,25 @@ final class BrightnessGuard {
             // Persist ownership before changing hardware so a crash between the
             // write and the next monitor cycle can be recovered on next launch.
             recoveryStore.save(currentBrightness)
-            switch controller.setBuiltInBrightness(0) {
-            case .success:
+            do {
+                try controller.setBrightness(0)
                 state = .dimmed(savedBrightness: currentBrightness)
                 logger.info(
-                    "Dimmed built-in display and saved original brightness \(currentBrightness, privacy: .public)"
+                    "Dimmed \(self.resourceName, privacy: .public) and saved original brightness \(currentBrightness, privacy: .public)"
                 )
-            case .failure(let error):
+            } catch {
                 recoveryStore.clear()
                 state = .idle
                 lastError = error.localizedDescription
-                logger.error("Dimming failed; discarded ownership record: \(error.localizedDescription, privacy: .public)")
+                logger.error(
+                    "Dimming \(self.resourceName, privacy: .public) failed; discarded ownership record: \(error.localizedDescription, privacy: .public)"
+                )
             }
+        } catch {
+            lastError = error.localizedDescription
+            logger.error(
+                "Cannot save \(self.resourceName, privacy: .public) brightness before dimming: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
@@ -132,49 +144,45 @@ final class BrightnessGuard {
             return
         }
 
-        switch controller.builtInBrightness() {
-        case .failure(let error):
-            state = .restorePending(savedBrightness: savedBrightness)
-            lastError = "Brightness restore pending"
-            logger.error(
-                "Brightness unavailable while restoring after \(reason, privacy: .public); will retry: \(error.localizedDescription, privacy: .public)"
-            )
-        case .success(let currentBrightness):
+        do {
+            let currentBrightness = try controller.currentBrightness()
             if currentBrightness > zeroThreshold {
                 // A user adjustment after our zero write takes precedence. We no
                 // longer own the brightness and must not replace their value.
                 recoveryStore.clear()
                 state = .idle
                 logger.info(
-                    "Brightness is \(currentBrightness, privacy: .public), not zero; treating it as a manual adjustment and relinquishing ownership without restoration"
+                    "\(self.resourceName, privacy: .public) brightness is \(currentBrightness, privacy: .public), not zero; treating it as a manual adjustment and relinquishing ownership without restoration"
                 )
                 return
             }
 
-            switch controller.setBuiltInBrightness(savedBrightness) {
-            case .success:
+            do {
+                try controller.setBrightness(savedBrightness)
                 recoveryStore.clear()
                 state = .idle
                 logger.info(
-                    "Restored built-in display brightness to \(savedBrightness, privacy: .public) after \(reason, privacy: .public)"
+                    "Restored \(self.resourceName, privacy: .public) brightness to \(savedBrightness, privacy: .public) after \(reason, privacy: .public)"
                 )
-            case .failure(let error):
+            } catch {
                 state = .restorePending(savedBrightness: savedBrightness)
-                lastError = "Brightness could not be restored; retrying"
+                lastError = "\(resourceName.capitalized) could not be restored; retrying"
                 logger.error(
-                    "Brightness restoration to \(savedBrightness, privacy: .public) failed after \(reason, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                    "\(self.resourceName, privacy: .public) brightness restoration to \(savedBrightness, privacy: .public) failed after \(reason, privacy: .public): \(error.localizedDescription, privacy: .public)"
                 )
             }
+        } catch {
+            state = .restorePending(savedBrightness: savedBrightness)
+            lastError = "\(resourceName.capitalized) restore pending"
+            logger.error(
+                "\(self.resourceName, privacy: .public) brightness unavailable while restoring after \(reason, privacy: .public); will retry: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
     private func detectManualOverride(savedBrightness: Float) {
-        switch controller.builtInBrightness() {
-        case .failure:
-            // The display often disappears temporarily during a clamshell or
-            // display reconfiguration. Keep ownership and retry later.
-            return
-        case .success(let currentBrightness):
+        do {
+            let currentBrightness = try controller.currentBrightness()
             guard currentBrightness > zeroThreshold else {
                 return
             }
@@ -182,8 +190,12 @@ final class BrightnessGuard {
             state = .idle
             isSuppressedForCurrentConditionCycle = true
             logger.info(
-                "Detected manual brightness change to \(currentBrightness, privacy: .public) while dimmed (saved value \(savedBrightness, privacy: .public)); suppressing dimming until conditions reset"
+                "Detected manual \(self.resourceName, privacy: .public) brightness change to \(currentBrightness, privacy: .public) while dimmed (saved value \(savedBrightness, privacy: .public)); suppressing dimming until conditions reset"
             )
+        } catch {
+            // The display often disappears temporarily during a clamshell or
+            // display reconfiguration. Keep ownership and retry later.
+            return
         }
     }
 }

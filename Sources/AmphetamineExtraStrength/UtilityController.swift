@@ -17,6 +17,8 @@ final class UtilityController: ObservableObject {
     private let lidService: LidStateReading
     private let brightnessController: BrightnessControlling
     private let brightnessGuard: BrightnessGuard
+    private let keyboardBacklightController: BrightnessControlling
+    private let keyboardBacklightGuard: BrightnessGuard
     private let loginItemService: LoginItemService
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.dawar.AmphetamineExtraStrength",
@@ -42,6 +44,11 @@ final class UtilityController: ObservableObject {
         lidService: LidStateReading = SystemLidStateService(),
         brightnessController: BrightnessControlling = SystemBrightnessService(),
         recoveryStore: BrightnessRecoveryStoring = UserDefaultsBrightnessRecoveryStore(),
+        keyboardBacklightController: BrightnessControlling = SystemKeyboardBacklightService(),
+        keyboardBacklightRecoveryStore: BrightnessRecoveryStoring =
+            UserDefaultsBrightnessRecoveryStore(
+                keyPrefix: "keyboardBacklightRecovery"
+            ),
         loginItemService: LoginItemService? = nil
     ) {
         let resolvedLoginItemService = loginItemService ?? LoginItemService()
@@ -52,6 +59,12 @@ final class UtilityController: ObservableObject {
         self.brightnessGuard = BrightnessGuard(
             controller: brightnessController,
             recoveryStore: recoveryStore
+        )
+        self.keyboardBacklightController = keyboardBacklightController
+        self.keyboardBacklightGuard = BrightnessGuard(
+            controller: keyboardBacklightController,
+            recoveryStore: keyboardBacklightRecoveryStore,
+            resourceName: "built-in keyboard backlight"
         )
         self.loginItemService = resolvedLoginItemService
         self.loginItemState = resolvedLoginItemService.state
@@ -84,6 +97,7 @@ final class UtilityController: ObservableObject {
 
         // Recover any persisted ownership record before considering a new dim.
         brightnessGuard.reconcile(shouldDim: false)
+        keyboardBacklightGuard.reconcile(shouldDim: false)
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refresh(reason: .timer)
@@ -176,14 +190,23 @@ final class UtilityController: ObservableObject {
             && amphetamineMeetsRequirement
 
         brightnessGuard.reconcile(shouldDim: shouldDim)
+        keyboardBacklightGuard.reconcile(shouldDim: shouldDim)
 
         var currentBrightness: Float?
         var brightnessReadError: String?
-        switch brightnessController.builtInBrightness() {
-        case .success(let brightness):
-            currentBrightness = brightness
-        case .failure(let error):
+        do {
+            currentBrightness = try brightnessController.currentBrightness()
+        } catch {
             brightnessReadError = error.localizedDescription
+        }
+
+        var currentKeyboardBacklightBrightness: Float?
+        var keyboardBacklightReadError: String?
+        do {
+            currentKeyboardBacklightBrightness =
+                try keyboardBacklightController.currentBrightness()
+        } catch {
+            keyboardBacklightReadError = error.localizedDescription
         }
 
         snapshot.installation = installedURL.map {
@@ -195,15 +218,24 @@ final class UtilityController: ObservableObject {
         snapshot.builtInBrightness = currentBrightness
         snapshot.brightnessOwnership = brightnessGuard.state
         snapshot.brightnessError = brightnessGuard.lastError ?? brightnessReadError
+        snapshot.keyboardBacklightBrightness = currentKeyboardBacklightBrightness
+        snapshot.keyboardBacklightOwnership = keyboardBacklightGuard.state
+        snapshot.keyboardBacklightError =
+            keyboardBacklightGuard.lastError ?? keyboardBacklightReadError
         snapshot.isMonitoring = true
         loginItemState = loginItemService.state
 
         logger.debug(
-            "Refresh \(reason.rawValue, privacy: .public): installed \(installedURL != nil, privacy: .public), running \(isRunning, privacy: .public), running samples \(self.consecutiveRunningSamples, privacy: .public), session \(sessionState.label, privacy: .public), active samples \(self.consecutiveActiveSessionSamples, privacy: .public), lid \(lidState.label, privacy: .public), should dim \(shouldDim, privacy: .public), owns brightness \(self.brightnessGuard.state.isOwned, privacy: .public)"
+            "Refresh \(reason.rawValue, privacy: .public): installed \(installedURL != nil, privacy: .public), running \(isRunning, privacy: .public), running samples \(self.consecutiveRunningSamples, privacy: .public), session \(sessionState.label, privacy: .public), active samples \(self.consecutiveActiveSessionSamples, privacy: .public), lid \(lidState.label, privacy: .public), should dim \(shouldDim, privacy: .public), owns display brightness \(self.brightnessGuard.state.isOwned, privacy: .public), owns keyboard backlight \(self.keyboardBacklightGuard.state.isOwned, privacy: .public)"
         )
 
-        if pendingTermination, !brightnessGuard.state.isOwned {
-            logger.info("Pending brightness restoration completed; terminating normally")
+        if pendingTermination,
+            !brightnessGuard.state.isOwned,
+            !keyboardBacklightGuard.state.isOwned
+        {
+            logger.info(
+                "Pending display and keyboard backlight restoration completed; terminating normally"
+            )
             pendingTermination = false
             stop()
             NSApp.terminate(nil)
@@ -220,6 +252,7 @@ final class UtilityController: ObservableObject {
 
     func restoreBrightnessNow() {
         brightnessGuard.restoreNow()
+        keyboardBacklightGuard.restoreNow()
         refresh(reason: .manual)
     }
 
@@ -266,15 +299,25 @@ final class UtilityController: ObservableObject {
             return
         }
 
-        if settings.restoreBrightnessOnExit, brightnessGuard.state.isOwned {
+        if settings.restoreBrightnessOnExit,
+            brightnessGuard.state.isOwned || keyboardBacklightGuard.state.isOwned
+        {
             brightnessGuard.restoreNow()
-            if brightnessGuard.state.isOwned {
+            keyboardBacklightGuard.restoreNow()
+            if brightnessGuard.state.isOwned || keyboardBacklightGuard.state.isOwned {
                 pendingTermination = true
                 snapshot.brightnessOwnership = brightnessGuard.state
+                snapshot.keyboardBacklightOwnership = keyboardBacklightGuard.state
                 snapshot.brightnessError =
-                    "Waiting for the built-in display to restore brightness before quitting"
+                    brightnessGuard.state.isOwned
+                    ? "Waiting for the built-in display to restore brightness before quitting"
+                    : nil
+                snapshot.keyboardBacklightError =
+                    keyboardBacklightGuard.state.isOwned
+                    ? "Waiting for the keyboard backlight to restore before quitting"
+                    : nil
                 logger.warning(
-                    "Normal quit deferred because brightness restoration is pending; monitoring will continue"
+                    "Normal quit deferred because display or keyboard backlight restoration is pending; monitoring will continue"
                 )
                 return
             }
@@ -287,6 +330,7 @@ final class UtilityController: ObservableObject {
     func prepareForSystemTermination() {
         if settings.restoreBrightnessOnExit {
             brightnessGuard.restoreNow()
+            keyboardBacklightGuard.restoreNow()
         }
         stop()
     }

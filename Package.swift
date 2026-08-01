@@ -14,8 +14,17 @@ let package = Package(
         )
     ],
     targets: [
+        .target(
+            name: "KeyboardBacklightBridge",
+            path: "Sources/KeyboardBacklightBridge",
+            publicHeadersPath: "include",
+            cSettings: [
+                .unsafeFlags(["-fobjc-arc"])
+            ]
+        ),
         .executableTarget(
             name: "AmphetamineExtraStrength",
+            dependencies: ["KeyboardBacklightBridge"],
             path: "Sources/AmphetamineExtraStrength"
         )
     ],

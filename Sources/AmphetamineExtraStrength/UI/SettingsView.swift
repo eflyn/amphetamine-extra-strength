@@ -42,9 +42,9 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Built-in display") {
+            Section("Built-in display and keyboard") {
                 Toggle(
-                    "Dim the display when the lid is closed",
+                    "Dim the display and keyboard backlight when the lid is closed",
                     isOn: $settings.dimWhenLidClosed
                 )
                 Toggle(
@@ -54,7 +54,7 @@ struct SettingsView: View {
 
                 LabeledContent("MacBook lid", value: controller.snapshot.lid.label)
                 LabeledContent(
-                    "Current brightness",
+                    "Display brightness",
                     value: percentLabel(controller.snapshot.builtInBrightness)
                 )
                 LabeledContent(
@@ -62,13 +62,34 @@ struct SettingsView: View {
                     value: controller.snapshot.hasDisplayDimmed ? "Yes" : "No"
                 )
                 if let saved = controller.snapshot.brightnessOwnership.savedBrightness {
-                    LabeledContent("Saved brightness", value: percentLabel(saved))
+                    LabeledContent(
+                        "Saved display brightness",
+                        value: percentLabel(saved)
+                    )
+                }
+                LabeledContent(
+                    "Keyboard backlight",
+                    value: percentLabel(
+                        controller.snapshot.keyboardBacklightBrightness
+                    )
+                )
+                LabeledContent(
+                    "Keyboard dimmed by this utility",
+                    value: controller.snapshot.hasKeyboardBacklightDimmed ? "Yes" : "No"
+                )
+                if let saved =
+                    controller.snapshot.keyboardBacklightOwnership.savedBrightness
+                {
+                    LabeledContent(
+                        "Saved keyboard backlight",
+                        value: percentLabel(saved)
+                    )
                 }
 
-                Button("Restore Brightness Now") {
+                Button("Restore Display and Keyboard Now") {
                     controller.restoreBrightnessNow()
                 }
-                .disabled(!controller.snapshot.brightnessOwnership.isOwned)
+                .disabled(!controller.snapshot.ownsAnyBrightness)
             }
 
             Section("Background operation") {
@@ -83,7 +104,7 @@ struct SettingsView: View {
                     )
                 )
                 Toggle(
-                    "Restore brightness when the utility exits",
+                    "Restore display and keyboard brightness when the utility exits",
                     isOn: $settings.restoreBrightnessOnExit
                 )
 
@@ -101,6 +122,7 @@ struct SettingsView: View {
 
             if let error = controller.snapshot.launchError
                 ?? controller.snapshot.brightnessError
+                ?? controller.snapshot.keyboardBacklightError
             {
                 Section("Needs attention") {
                     Label(error, systemImage: "exclamationmark.triangle.fill")

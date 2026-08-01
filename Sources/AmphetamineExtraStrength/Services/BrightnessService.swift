@@ -4,8 +4,8 @@ import Foundation
 import os
 
 protocol BrightnessControlling: AnyObject {
-    func builtInBrightness() -> Result<Float, BrightnessControlError>
-    func setBuiltInBrightness(_ brightness: Float) -> Result<Void, BrightnessControlError>
+    func currentBrightness() throws -> Float
+    func setBrightness(_ brightness: Float) throws
 }
 
 enum BrightnessControlError: LocalizedError, Equatable {
@@ -63,12 +63,12 @@ final class SystemBrightnessService: BrightnessControlling {
         }
     }
 
-    func builtInBrightness() -> Result<Float, BrightnessControlError> {
+    func currentBrightness() throws -> Float {
         guard let getBrightnessFunction else {
-            return .failure(.displayServicesUnavailable)
+            throw BrightnessControlError.displayServicesUnavailable
         }
         guard let displayID = builtInDisplayID() else {
-            return .failure(.builtInDisplayUnavailable)
+            throw BrightnessControlError.builtInDisplayUnavailable
         }
 
         var brightness: Float = 0
@@ -77,17 +77,17 @@ final class SystemBrightnessService: BrightnessControlling {
             logger.error(
                 "DisplayServicesGetBrightness failed for built-in display \(displayID, privacy: .public) with status \(result, privacy: .public)"
             )
-            return .failure(.readFailed(result))
+            throw BrightnessControlError.readFailed(result)
         }
-        return .success(min(max(brightness, 0), 1))
+        return min(max(brightness, 0), 1)
     }
 
-    func setBuiltInBrightness(_ brightness: Float) -> Result<Void, BrightnessControlError> {
+    func setBrightness(_ brightness: Float) throws {
         guard let setBrightnessFunction else {
-            return .failure(.displayServicesUnavailable)
+            throw BrightnessControlError.displayServicesUnavailable
         }
         guard let displayID = builtInDisplayID() else {
-            return .failure(.builtInDisplayUnavailable)
+            throw BrightnessControlError.builtInDisplayUnavailable
         }
 
         let clampedBrightness = min(max(brightness, 0), 1)
@@ -96,13 +96,12 @@ final class SystemBrightnessService: BrightnessControlling {
             logger.error(
                 "DisplayServicesSetBrightness failed for built-in display \(displayID, privacy: .public), requested brightness \(clampedBrightness, privacy: .public), status \(result, privacy: .public)"
             )
-            return .failure(.writeFailed(result))
+            throw BrightnessControlError.writeFailed(result)
         }
 
         logger.info(
             "Changed built-in display \(displayID, privacy: .public) brightness to \(clampedBrightness, privacy: .public)"
         )
-        return .success(())
     }
 
     private func builtInDisplayID() -> CGDirectDisplayID? {

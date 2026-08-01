@@ -26,7 +26,7 @@ struct OnboardingView: View {
             }
 
             Text(
-                "When an Amphetamine session is keeping your Mac awake and the lid closes, this utility saves the built-in display brightness, sets it to zero, and restores it as soon as those conditions end."
+                "When an Amphetamine session is keeping your Mac awake and the lid closes, this utility saves the built-in display and keyboard backlight brightness, sets both to zero, and restores them as soon as those conditions end."
             )
             .fixedSize(horizontal: false, vertical: true)
 

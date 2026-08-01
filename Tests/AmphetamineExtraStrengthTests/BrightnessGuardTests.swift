@@ -21,9 +21,13 @@ struct BrightnessGuardTests {
             "A crash recovery record is restored before a new dim",
             crashRecoveryRecordIsRestoredBeforeNewDimming
         )
+        run(
+            "Display and keyboard ownership remain independent",
+            displayAndKeyboardOwnershipRemainIndependent
+        )
 
         if failures == 0 {
-            print("All 6 brightness guard tests passed.")
+            print("All 7 brightness guard tests passed.")
         } else {
             fputs("\(failures) brightness guard test(s) failed.\n", stderr)
             exit(1)
@@ -171,6 +175,48 @@ struct BrightnessGuardTests {
         try expect(recovery.savedBrightness == nil, "Expected recovery to clear")
     }
 
+    static func displayAndKeyboardOwnershipRemainIndependent() throws {
+        let display = MockBrightnessController(brightness: 0.76)
+        let keyboard = MockBrightnessController(brightness: 0.42)
+        let displayRecovery = MockRecoveryStore()
+        let keyboardRecovery = MockRecoveryStore()
+        let displayGuard = BrightnessGuard(
+            controller: display,
+            recoveryStore: displayRecovery,
+            resourceName: "built-in display"
+        )
+        let keyboardGuard = BrightnessGuard(
+            controller: keyboard,
+            recoveryStore: keyboardRecovery,
+            resourceName: "built-in keyboard backlight"
+        )
+
+        displayGuard.reconcile(shouldDim: true)
+        keyboardGuard.reconcile(shouldDim: true)
+        keyboard.brightness = 0.21
+        keyboardGuard.reconcile(shouldDim: true)
+        displayGuard.reconcile(shouldDim: false)
+        keyboardGuard.reconcile(shouldDim: false)
+
+        try expect(
+            display.setRequests == [0, 0.76],
+            "Expected display to dim and restore independently"
+        )
+        try expect(
+            keyboard.setRequests == [0],
+            "Expected the keyboard manual override to remain untouched"
+        )
+        try expect(
+            abs(keyboard.brightness - 0.21) < 0.0001,
+            "Expected the keyboard manual value to remain"
+        )
+        try expect(
+            displayRecovery.savedBrightness == nil
+                && keyboardRecovery.savedBrightness == nil,
+            "Expected both ownership records to clear independently"
+        )
+    }
+
     private static func run(
         _ name: String,
         _ test: () throws -> Void
@@ -209,24 +255,21 @@ private final class MockBrightnessController: BrightnessControlling {
         self.brightness = brightness
     }
 
-    func builtInBrightness() -> Result<Float, BrightnessControlError> {
+    func currentBrightness() throws -> Float {
         if let error = nextReadError {
             nextReadError = nil
-            return .failure(error)
+            throw error
         }
-        return .success(brightness)
+        return brightness
     }
 
-    func setBuiltInBrightness(
-        _ brightness: Float
-    ) -> Result<Void, BrightnessControlError> {
+    func setBrightness(_ brightness: Float) throws {
         setRequests.append(brightness)
         if let error = nextSetError {
             nextSetError = nil
-            return .failure(error)
+            throw error
         }
         self.brightness = brightness
-        return .success(())
     }
 }
 
