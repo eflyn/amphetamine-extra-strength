@@ -1,0 +1,247 @@
+import Darwin
+import Foundation
+
+@main
+struct BrightnessGuardTests {
+    private static var failures = 0
+
+    static func main() {
+        run(
+            "Dimming happens once and never replaces the saved brightness with zero",
+            dimsOnceAndNeverReplacesSavedBrightnessWithZero
+        )
+        run("An existing zero is never claimed", doesNotClaimBrightnessThatWasAlreadyZero)
+        run("Brightness restores only once", restoresOnlyOnceWhenConditionsEnd)
+        run(
+            "A manual adjustment relinquishes ownership and suppresses re-dimming",
+            manualAdjustmentRelinquishesOwnershipAndSuppressesRedimming
+        )
+        run("A failed restore stays pending and retries", failedRestoreRemainsPendingAndRetriesLater)
+        run(
+            "A crash recovery record is restored before a new dim",
+            crashRecoveryRecordIsRestoredBeforeNewDimming
+        )
+
+        if failures == 0 {
+            print("All 6 brightness guard tests passed.")
+        } else {
+            fputs("\(failures) brightness guard test(s) failed.\n", stderr)
+            exit(1)
+        }
+    }
+
+    static func dimsOnceAndNeverReplacesSavedBrightnessWithZero() throws {
+        let brightness = MockBrightnessController(brightness: 0.72)
+        let recovery = MockRecoveryStore()
+        let guardUnderTest = BrightnessGuard(
+            controller: brightness,
+            recoveryStore: recovery
+        )
+
+        guardUnderTest.reconcile(shouldDim: true)
+        guardUnderTest.reconcile(shouldDim: true)
+
+        try expect(brightness.setRequests == [0], "Expected exactly one zero write")
+        try expect(
+            abs((recovery.savedBrightness ?? 0) - 0.72) < 0.0001,
+            "Expected the original brightness to remain saved"
+        )
+        try expect(
+            guardUnderTest.state == .dimmed(savedBrightness: 0.72),
+            "Expected owned dim state"
+        )
+    }
+
+    static func doesNotClaimBrightnessThatWasAlreadyZero() throws {
+        let brightness = MockBrightnessController(brightness: 0)
+        let recovery = MockRecoveryStore()
+        let guardUnderTest = BrightnessGuard(
+            controller: brightness,
+            recoveryStore: recovery
+        )
+
+        guardUnderTest.reconcile(shouldDim: true)
+
+        try expect(brightness.setRequests.isEmpty, "Expected no brightness write")
+        try expect(recovery.savedBrightness == nil, "Expected no recovery record")
+        try expect(guardUnderTest.state == .idle, "Expected idle state")
+    }
+
+    static func restoresOnlyOnceWhenConditionsEnd() throws {
+        let brightness = MockBrightnessController(brightness: 0.61)
+        let recovery = MockRecoveryStore()
+        let guardUnderTest = BrightnessGuard(
+            controller: brightness,
+            recoveryStore: recovery
+        )
+
+        guardUnderTest.reconcile(shouldDim: true)
+        guardUnderTest.reconcile(shouldDim: false)
+        guardUnderTest.reconcile(shouldDim: false)
+
+        try expect(
+            brightness.setRequests == [0, 0.61],
+            "Expected one dim and one restore write"
+        )
+        try expect(recovery.savedBrightness == nil, "Expected recovery to clear")
+        try expect(guardUnderTest.state == .idle, "Expected idle state")
+    }
+
+    static func manualAdjustmentRelinquishesOwnershipAndSuppressesRedimming() throws {
+        let brightness = MockBrightnessController(brightness: 0.84)
+        let recovery = MockRecoveryStore()
+        let guardUnderTest = BrightnessGuard(
+            controller: brightness,
+            recoveryStore: recovery
+        )
+
+        guardUnderTest.reconcile(shouldDim: true)
+        brightness.brightness = 0.33
+        guardUnderTest.reconcile(shouldDim: true)
+        guardUnderTest.reconcile(shouldDim: true)
+
+        try expect(brightness.setRequests == [0], "Expected no second dim write")
+        try expect(
+            abs(brightness.brightness - 0.33) < 0.0001,
+            "Expected the manual value to remain"
+        )
+        try expect(recovery.savedBrightness == nil, "Expected ownership to clear")
+        try expect(
+            guardUnderTest.isSuppressedForCurrentConditionCycle,
+            "Expected suppression for the current cycle"
+        )
+
+        guardUnderTest.reconcile(shouldDim: false)
+        try expect(
+            !guardUnderTest.isSuppressedForCurrentConditionCycle,
+            "Expected suppression to reset"
+        )
+    }
+
+    static func failedRestoreRemainsPendingAndRetriesLater() throws {
+        let brightness = MockBrightnessController(brightness: 0.45)
+        let recovery = MockRecoveryStore()
+        let guardUnderTest = BrightnessGuard(
+            controller: brightness,
+            recoveryStore: recovery
+        )
+
+        guardUnderTest.reconcile(shouldDim: true)
+        brightness.nextSetError = .writeFailed(-1)
+        guardUnderTest.reconcile(shouldDim: false)
+
+        try expect(
+            guardUnderTest.state == .restorePending(savedBrightness: 0.45),
+            "Expected restore-pending state"
+        )
+        try expect(
+            abs((recovery.savedBrightness ?? 0) - 0.45) < 0.0001,
+            "Expected recovery record to remain"
+        )
+
+        guardUnderTest.reconcile(shouldDim: false)
+
+        try expect(guardUnderTest.state == .idle, "Expected eventual idle state")
+        try expect(
+            abs(brightness.brightness - 0.45) < 0.0001,
+            "Expected eventual restoration"
+        )
+        try expect(recovery.savedBrightness == nil, "Expected recovery to clear")
+    }
+
+    static func crashRecoveryRecordIsRestoredBeforeNewDimming() throws {
+        let brightness = MockBrightnessController(brightness: 0)
+        let recovery = MockRecoveryStore(savedBrightness: 0.69)
+        let guardUnderTest = BrightnessGuard(
+            controller: brightness,
+            recoveryStore: recovery
+        )
+
+        guardUnderTest.reconcile(shouldDim: true)
+
+        try expect(
+            brightness.setRequests == [0.69],
+            "Expected restoration before any new dim"
+        )
+        try expect(
+            abs(brightness.brightness - 0.69) < 0.0001,
+            "Expected the crash recovery value"
+        )
+        try expect(guardUnderTest.state == .idle, "Expected idle state")
+        try expect(recovery.savedBrightness == nil, "Expected recovery to clear")
+    }
+
+    private static func run(
+        _ name: String,
+        _ test: () throws -> Void
+    ) {
+        do {
+            try test()
+            print("✓ \(name)")
+        } catch {
+            failures += 1
+            fputs("✗ \(name): \(error)\n", stderr)
+        }
+    }
+
+    private static func expect(
+        _ condition: @autoclosure () -> Bool,
+        _ message: String
+    ) throws {
+        guard condition() else {
+            throw TestFailure(message: message)
+        }
+    }
+}
+
+private struct TestFailure: Error, CustomStringConvertible {
+    let message: String
+    var description: String { message }
+}
+
+private final class MockBrightnessController: BrightnessControlling {
+    var brightness: Float
+    var nextReadError: BrightnessControlError?
+    var nextSetError: BrightnessControlError?
+    private(set) var setRequests: [Float] = []
+
+    init(brightness: Float) {
+        self.brightness = brightness
+    }
+
+    func builtInBrightness() -> Result<Float, BrightnessControlError> {
+        if let error = nextReadError {
+            nextReadError = nil
+            return .failure(error)
+        }
+        return .success(brightness)
+    }
+
+    func setBuiltInBrightness(
+        _ brightness: Float
+    ) -> Result<Void, BrightnessControlError> {
+        setRequests.append(brightness)
+        if let error = nextSetError {
+            nextSetError = nil
+            return .failure(error)
+        }
+        self.brightness = brightness
+        return .success(())
+    }
+}
+
+private final class MockRecoveryStore: BrightnessRecoveryStoring {
+    private(set) var savedBrightness: Float?
+
+    init(savedBrightness: Float? = nil) {
+        self.savedBrightness = savedBrightness
+    }
+
+    func save(_ brightness: Float) {
+        savedBrightness = brightness
+    }
+
+    func clear() {
+        savedBrightness = nil
+    }
+}

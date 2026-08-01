@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>AmphetamineExtraStrength</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.dawar.AmphetamineExtraStrength</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Amphetamine Extra Strength</string>
+    <key>CFBundleDisplayName</key>
+    <string>Amphetamine Extra Strength</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>LSMultipleInstancesProhibited</key>
+    <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Checks whether an Amphetamine session is active so the built-in display is dimmed only while Amphetamine is keeping this Mac awake.</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
