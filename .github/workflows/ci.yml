@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run state-machine tests
         run: ./scripts/run-tests.sh
